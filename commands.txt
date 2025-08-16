@@ -1,0 +1,4 @@
+to load or reload the server - uvicorn main:app --reload
+page in browser - http://127.0.0.1:8000
+
+

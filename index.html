@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magic Data Assistant</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Custom Google Font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chat-message {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        pre {
+            background-color: #1E293B;
+            color: #E2E8F0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f1f5f9;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-800 flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+            
+            <header class="bg-gray-800 text-white p-6 text-center">
+                <h1 class="text-2xl font-bold">Magic Data Assistant</h1>
+                <p class="text-sm text-gray-400">Upload a CSV and ask questions in plain English.</p>
+            </header>
+
+            <main class="p-6 md:p-8">
+                <!-- Step 1: Upload Section -->
+                <section id="upload-section" class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2 text-gray-700 text-left">Step 1: Upload Your Data</h2>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center mt-6">
+                        <input type="file" id="csv-file-input" accept=".csv" class="block w-full text-sm text-gray-500
+                            file:mx-auto file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-violet-50 file:text-violet-700
+                            hover:file:bg-violet-100"
+                        />
+                        <button id="upload-button" class="mt-4 bg-violet-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-violet-700 transition-colors disabled:bg-gray-400">
+                            Upload & Process
+                        </button>
+                    </div>
+                    <div id="upload-status" class="mt-4 text-center text-sm font-medium h-5"></div>
+                </section>
+
+                <!-- Step 2: Chat Section -->
+                <section id="chat-section" class="hidden">
+                    <h2 class="text-xl font-semibold mb-4 border-b pb-2 text-gray-700 text-left">Step 2: Chat with Your Data</h2>
+                    
+                    <div id="chat-messages" class="h-96 overflow-y-auto bg-gray-50 p-4 rounded-lg border mb-4 space-y-4 text-left">
+                        <div class="chat-message">
+                            <p class="bg-violet-100 text-violet-800 rounded-lg p-3 max-w-md inline-block">
+                                Hello! Your data has been uploaded. I'm ready to answer your questions.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4">
+                        <input type="text" id="chat-input" placeholder="e.g., What were the total sales last week?" class="flex-grow border-gray-300 rounded-lg shadow-sm focus:ring-violet-500 focus:border-violet-500 transition">
+                        <button id="send-button" class="bg-violet-600 text-white font-bold py-2 px-6 rounded-lg hover:bg-violet-700 transition-colors disabled:bg-gray-400">
+                            Send
+                        </button>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+        <footer class="text-center text-xs text-gray-500 mt-6">
+            <p>Powered by FastAPI, Google Gemini & Neon DB</p>
+        </footer>
+    </div>
+
+    <script>
+        const uploadSection = document.getElementById('upload-section');
+        const chatSection = document.getElementById('chat-section');
+        const fileInput = document.getElementById('csv-file-input');
+        const uploadButton = document.getElementById('upload-button');
+        const uploadStatus = document.getElementById('upload-status');
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+
+        let currentTableName = null;
+
+        uploadButton.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                uploadStatus.textContent = 'Please select a file first.';
+                uploadStatus.className = 'mt-4 text-center text-sm font-medium h-5 text-red-600';
+                return;
+            }
+            const formData = new FormData();
+            formData.append('file', file);
+            uploadStatus.textContent = 'Uploading and processing...';
+            uploadStatus.className = 'mt-4 text-center text-sm font-medium h-5 text-blue-600';
+            uploadButton.disabled = true;
+            try {
+                const response = await fetch('/upload-csv/', { method: 'POST', body: formData });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || 'An unknown error occurred.');
+                uploadStatus.textContent = result.message;
+                uploadStatus.className = 'mt-4 text-center text-sm font-medium h-5 text-green-600';
+                currentTableName = result.database_table_created;
+                uploadSection.classList.add('hidden');
+                chatSection.classList.remove('hidden');
+            } catch (error) {
+                uploadStatus.textContent = `Error: ${error.message}`;
+                uploadStatus.className = 'mt-4 text-center text-sm font-medium h-5 text-red-600';
+                uploadButton.disabled = false;
+            }
+        });
+        
+        function addChatMessage(message, sender = 'user') {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            if (sender === 'user') {
+                messageDiv.classList.add('text-right');
+                messageDiv.innerHTML = `<p class="bg-blue-500 text-white rounded-lg p-3 max-w-md inline-block">${message.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+            } else {
+                messageDiv.innerHTML = `<p class="bg-violet-100 text-violet-800 rounded-lg p-3 max-w-md inline-block">${message.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</p>`;
+            }
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+        
+        function addFormattedChatMessage(htmlContent) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message';
+            messageDiv.innerHTML = `<div class="text-left max-w-full">${htmlContent}</div>`;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function createTableHTML(data) {
+            if (!data || data.length === 0) return '<p>Query returned no results.</p>';
+            let table = '<table><thead><tr>';
+            const headers = Object.keys(data[0]);
+            headers.forEach(h => table += `<th>${h}</th>`);
+            table += '</tr></thead><tbody>';
+            data.forEach(row => {
+                table += '<tr>';
+                headers.forEach(h => table += `<td>${row[h]}</td>`);
+                table += '</tr>';
+            });
+            table += '</tbody></table>';
+            return table;
+        }
+
+        async function handleSendMessage() {
+            const userMessage = chatInput.value.trim();
+            if (!userMessage || !currentTableName) return;
+
+            addChatMessage(userMessage, 'user');
+            chatInput.value = '';
+            
+            sendButton.disabled = true;
+            chatInput.disabled = true;
+            addChatMessage("Thinking...", 'assistant');
+
+            try {
+                const response = await fetch('/chat/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ table_name: currentTableName, question: userMessage }),
+                });
+                const result = await response.json();
+                
+                chatMessages.removeChild(chatMessages.lastChild); // Remove "Thinking..."
+
+                if (!response.ok) throw new Error(result.detail || 'An error occurred with the AI model.');
+                
+                // Create the final response message with the SQL and the results table
+                const sqlBlock = `<p class="text-sm text-gray-500 mb-1">I ran this SQL query:</p><pre><code>${result.sql_query}</code></pre>`;
+                const resultTable = `<p class="text-sm text-gray-500 mt-4 mb-1">Here is the result:</p>${createTableHTML(result.query_result)}`;
+                
+                addFormattedChatMessage(sqlBlock + resultTable);
+
+            } catch (error) {
+                chatMessages.removeChild(chatMessages.lastChild);
+                addChatMessage(`Error: ${error.message}`, 'assistant');
+            } finally {
+                sendButton.disabled = false;
+                chatInput.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        sendButton.addEventListener('click', handleSendMessage);
+        chatInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') handleSendMessage(); });
+    </script>
+</body>
+</html>
